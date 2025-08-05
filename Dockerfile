@@ -1,30 +1,26 @@
-# docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t lilxhan/cron-ticker:latest --push .
-# FROM --platform=$BUILDPLATFORM node:22.17.1-alpine
-
-# docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t lilxhan/cron-ticker:latest --push .
-# /app /usr /lib
-FROM node:22.17.1-alpine
-
-# cd app
+# Dependencies Development
+FROM node:22.17.1-alpine AS deps
 WORKDIR /app
-
-# dest /app
 COPY package.json ./
-
-# Install dependencies
 RUN npm install
 
-# dest /app
+# Build an Test
+FROM node:22.17.1-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Execute test
 RUN npm run test
 
-# Delete files and dirs [devs]
-RUN rm -rf tests && rm -rf node_modules
-
-# Only install deps production
+# Deps Production
+FROM node:22.17.1-alpine AS prod-deps
+WORKDIR /app
+COPY package.json ./
 RUN npm install --prod
 
-# Command run the application
-CMD ["npm", "start"]
+# Execute App
+FROM --platform=$BUILDPLATFORM node:22.17.1-alpine AS runner
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY tasks/ ./tasks
+COPY app.js .
+CMD ["node", "app.js"]
